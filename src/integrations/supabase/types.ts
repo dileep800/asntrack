@@ -14,7 +14,171 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      asn_info: {
+        Row: {
+          asn_number: number
+          country: string | null
+          created_at: string
+          id: string
+          organization: string | null
+          updated_at: string
+        }
+        Insert: {
+          asn_number: number
+          country?: string | null
+          created_at?: string
+          id?: string
+          organization?: string | null
+          updated_at?: string
+        }
+        Update: {
+          asn_number?: number
+          country?: string | null
+          created_at?: string
+          id?: string
+          organization?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      cidr_ranges: {
+        Row: {
+          asn_id: string
+          cidr_range: unknown
+          created_at: string
+          id: string
+          ip_count: number | null
+        }
+        Insert: {
+          asn_id: string
+          cidr_range: unknown
+          created_at?: string
+          id?: string
+          ip_count?: number | null
+        }
+        Update: {
+          asn_id?: string
+          cidr_range?: unknown
+          created_at?: string
+          id?: string
+          ip_count?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cidr_ranges_asn_id_fkey"
+            columns: ["asn_id"]
+            isOneToOne: false
+            referencedRelation: "asn_info"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      discovered_ips: {
+        Row: {
+          created_at: string
+          id: string
+          ip_address: unknown
+          is_active: boolean | null
+          job_id: string
+          port_scan_data: Json | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          ip_address: unknown
+          is_active?: boolean | null
+          job_id: string
+          port_scan_data?: Json | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          ip_address?: unknown
+          is_active?: boolean | null
+          job_id?: string
+          port_scan_data?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "discovered_ips_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "tracking_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      resolved_domains: {
+        Row: {
+          created_at: string
+          domain_name: string
+          domain_type: string | null
+          id: string
+          ip_address: unknown
+          job_id: string
+        }
+        Insert: {
+          created_at?: string
+          domain_name: string
+          domain_type?: string | null
+          id?: string
+          ip_address: unknown
+          job_id: string
+        }
+        Update: {
+          created_at?: string
+          domain_name?: string
+          domain_type?: string | null
+          id?: string
+          ip_address?: unknown
+          job_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "resolved_domains_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "tracking_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tracking_jobs: {
+        Row: {
+          asn_number: number
+          created_at: string
+          current_step: number | null
+          error_message: string | null
+          id: string
+          progress_data: Json | null
+          status: string
+          total_steps: number | null
+          updated_at: string
+        }
+        Insert: {
+          asn_number: number
+          created_at?: string
+          current_step?: number | null
+          error_message?: string | null
+          id?: string
+          progress_data?: Json | null
+          status?: string
+          total_steps?: number | null
+          updated_at?: string
+        }
+        Update: {
+          asn_number?: number
+          created_at?: string
+          current_step?: number | null
+          error_message?: string | null
+          id?: string
+          progress_data?: Json | null
+          status?: string
+          total_steps?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
