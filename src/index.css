@@ -2,39 +2,56 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+/* Cybersecurity/Penetration Testing Design System - Dark Theme */
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --background: 220 20% 5%;
+    --foreground: 210 40% 98%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card: 220 15% 8%;
+    --card-foreground: 210 40% 98%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover: 220 15% 8%;
+    --popover-foreground: 210 40% 98%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    --primary: 200 98% 39%;
+    --primary-foreground: 220 20% 5%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 220 15% 12%;
+    --secondary-foreground: 210 40% 98%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 220 15% 12%;
+    --muted-foreground: 215 20% 65%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 142 76% 36%;
+    --accent-foreground: 220 20% 5%;
 
-    --destructive: 0 84.2% 60.2%;
+    --destructive: 0 84% 60%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --border: 220 15% 15%;
+    --input: 220 15% 12%;
+    --ring: 200 98% 39%;
+
+    /* Custom cyber theme variables */
+    --cyber-blue: 200 98% 39%;
+    --cyber-green: 142 76% 36%;
+    --cyber-purple: 270 95% 60%;
+    --cyber-orange: 25 95% 53%;
+    
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(var(--cyber-blue)), hsl(var(--cyber-purple)));
+    --gradient-accent: linear-gradient(135deg, hsl(var(--cyber-green)), hsl(var(--cyber-blue)));
+    --gradient-danger: linear-gradient(135deg, hsl(var(--destructive)), hsl(var(--cyber-orange)));
+    
+    /* Glows and shadows */
+    --glow-primary: 0 0 20px hsl(var(--cyber-blue) / 0.3);
+    --glow-accent: 0 0 20px hsl(var(--cyber-green) / 0.3);
+    --shadow-cyber: 0 8px 32px hsl(var(--cyber-blue) / 0.15);
+    
+    /* Animations */
+    --transition-cyber: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
     --radius: 0.5rem;
 
@@ -101,5 +118,85 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+@layer components {
+  /* Cyber-themed button variants */
+  .btn-cyber {
+    @apply bg-gradient-to-r from-primary to-purple-500 text-primary-foreground px-6 py-3 rounded-lg font-semibold;
+    @apply hover:shadow-[0_0_20px_theme(colors.primary/30)] transition-all duration-300;
+    @apply border border-primary/20;
+  }
+  
+  .btn-cyber-outline {
+    @apply border-2 border-primary bg-transparent text-primary px-6 py-3 rounded-lg font-semibold;
+    @apply hover:bg-primary hover:text-primary-foreground hover:shadow-[0_0_20px_theme(colors.primary/30)];
+    @apply transition-all duration-300;
+  }
+  
+  .btn-cyber-accent {
+    @apply bg-gradient-to-r from-accent to-green-400 text-accent-foreground px-6 py-3 rounded-lg font-semibold;
+    @apply hover:shadow-[0_0_20px_theme(colors.accent/30)] transition-all duration-300;
+    @apply border border-accent/20;
+  }
+
+  /* Cyber card styles */
+  .card-cyber {
+    @apply bg-card border border-border/50 rounded-lg p-6;
+    @apply backdrop-blur-sm hover:border-primary/30 transition-all duration-300;
+    @apply hover:shadow-[0_8px_32px_theme(colors.primary/15)];
+  }
+
+  /* Glowing text effect */
+  .text-glow {
+    @apply text-primary;
+    text-shadow: 0 0 10px hsl(var(--primary) / 0.5);
+  }
+  
+  .text-glow-accent {
+    @apply text-accent;
+    text-shadow: 0 0 10px hsl(var(--accent) / 0.5);
+  }
+
+  /* Progress bar styles */
+  .progress-cyber {
+    @apply bg-secondary rounded-full overflow-hidden;
+    background: linear-gradient(90deg, hsl(var(--primary)) 0%, hsl(var(--primary)) var(--progress, 0%), hsl(var(--secondary)) var(--progress, 0%), hsl(var(--secondary)) 100%);
+  }
+
+  /* Cyber grid background */
+  .cyber-grid {
+    background-image: 
+      linear-gradient(rgba(0, 195, 255, 0.1) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0, 195, 255, 0.1) 1px, transparent 1px);
+    background-size: 20px 20px;
+  }
+
+  /* Scan line animation */
+  @keyframes scan-line {
+    0% { transform: translateY(-100%); }
+    100% { transform: translateY(100vh); }
+  }
+  
+  .scan-line {
+    animation: scan-line 3s linear infinite;
+  }
+
+  /* Typing animation */
+  @keyframes typing {
+    from { width: 0; }
+    to { width: 100%; }
+  }
+  
+  @keyframes blink {
+    50% { border-color: transparent; }
+  }
+  
+  .typing-animation {
+    animation: typing 2s steps(20, end), blink 0.5s step-end infinite alternate;
+    border-right: 2px solid hsl(var(--primary));
+    overflow: hidden;
+    white-space: nowrap;
   }
 }
