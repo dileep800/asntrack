@@ -107,7 +107,7 @@ const ASNTracker = () => {
         setResults([{
           type: 'asn',
           value: `AS${asnNum}`,
-          details: `${data.asn_info.organization_name || 'Organization'} (${data.asn_info.country_code || 'Unknown'})`
+          details: `${data.asn_info.organization || 'Organization'} (${data.asn_info.country || 'Unknown'})`
         }]);
       }
 

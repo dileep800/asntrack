@@ -103,9 +103,8 @@ serve(async (req) => {
       
       const mockAsnInfo = {
         asn_number,
-        organization_name: `Organization for AS${asn_number}`,
-        country_code: 'US',
-        description: `Autonomous System ${asn_number}`
+        organization: `Organization for AS${asn_number}`,
+        country: 'US'
       };
 
       const { data: insertedAsn, error: insertError } = await supabase
