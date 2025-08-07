@@ -1,7 +1,7 @@
 project_id = "jcjwlvinduhofjzrcgqy"
 
 [functions.start-asn-tracking]
-verify_jwt = true
+verify_jwt = false
 
 [functions.get-tracking-status]
-verify_jwt = true
+verify_jwt = false
