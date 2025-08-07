@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Search, Activity, Globe, MapPin, Clock, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import Navigation from '@/components/Navigation';
+import { supabase } from '@/integrations/supabase/client';
 
 interface TrackingStep {
   id: number;
@@ -26,6 +27,7 @@ const ASNTracker = () => {
   const [isTracking, setIsTracking] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [results, setResults] = useState<Result[]>([]);
+  const [jobId, setJobId] = useState<string | null>(null);
   const { toast } = useToast();
 
   const trackingSteps: TrackingStep[] = [
@@ -61,10 +63,20 @@ const ASNTracker = () => {
 
   const [steps, setSteps] = useState(trackingSteps);
 
-  const simulateTracking = async () => {
+  const startTracking = async () => {
     if (!asnNumber.trim()) {
       toast({
         title: "Invalid Input",
+        description: "Please enter a valid ASN number",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const asnNum = parseInt(asnNumber.trim());
+    if (isNaN(asnNum) || asnNum <= 0) {
+      toast({
+        title: "Invalid ASN",
         description: "Please enter a valid ASN number",
         variant: "destructive"
       });
@@ -79,77 +91,146 @@ const ASNTracker = () => {
     setSteps(trackingSteps.map(step => ({ ...step, status: 'pending', progress: 0 })));
 
     try {
-      // Simulate each step
-      for (let i = 0; i < trackingSteps.length; i++) {
-        setCurrentStep(i);
-        
-        // Update current step to processing
-        setSteps(prev => prev.map((step, index) => 
-          index === i ? { ...step, status: 'processing' } : step
-        ));
+      // Start tracking job
+      const { data, error } = await supabase.functions.invoke('start-asn-tracking', {
+        body: { asn_number: asnNum }
+      });
 
-        // Simulate progress
-        for (let progress = 0; progress <= 100; progress += 10) {
-          await new Promise(resolve => setTimeout(resolve, 100));
-          setSteps(prev => prev.map((step, index) => 
-            index === i ? { ...step, progress } : step
-          ));
-        }
+      if (error) {
+        throw error;
+      }
 
-        // Complete current step and add results
-        setSteps(prev => prev.map((step, index) => 
-          index === i ? { ...step, status: 'completed', progress: 100 } : step
-        ));
-
-        // Add mock results based on step
-        switch (i) {
-          case 0:
-            setResults(prev => [...prev, { 
-              type: 'asn', 
-              value: `AS${asnNumber}`, 
-              details: 'Valid ASN found' 
-            }]);
-            break;
-          case 1:
-            setResults(prev => [...prev, 
-              { type: 'cidr', value: '192.168.1.0/24', details: 'Primary range' },
-              { type: 'cidr', value: '10.0.0.0/16', details: 'Secondary range' }
-            ]);
-            break;
-          case 2:
-            setResults(prev => [...prev,
-              { type: 'ip', value: '192.168.1.1', details: 'Active host' },
-              { type: 'ip', value: '192.168.1.100', details: 'Web server' },
-              { type: 'ip', value: '10.0.0.1', details: 'Gateway' }
-            ]);
-            break;
-          case 3:
-            setResults(prev => [...prev,
-              { type: 'domain', value: 'example.com', details: 'Primary domain' },
-              { type: 'domain', value: 'subdomain.example.com', details: 'Subdomain' },
-              { type: 'domain', value: 'api.example.com', details: 'API endpoint' }
-            ]);
-            break;
-        }
-
-        await new Promise(resolve => setTimeout(resolve, 500));
+      setJobId(data.job_id);
+      
+      // Add initial ASN result
+      if (data.asn_info) {
+        setResults([{
+          type: 'asn',
+          value: `AS${asnNum}`,
+          details: `${data.asn_info.organization_name || 'Organization'} (${data.asn_info.country_code || 'Unknown'})`
+        }]);
       }
 
       toast({
-        title: "Tracking Complete",
-        description: `Successfully tracked ASN ${asnNumber}`,
+        title: "Tracking Started",
+        description: `Started tracking ASN ${asnNum}`,
       });
 
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Tracking start failed:', error);
       toast({
         title: "Tracking Failed",
-        description: "An error occurred during tracking",
+        description: error.message || "An error occurred starting the tracking",
         variant: "destructive"
       });
-    } finally {
       setIsTracking(false);
     }
   };
+
+  const updateTrackingStatus = async () => {
+    if (!jobId) return;
+
+    try {
+      const { data, error } = await supabase.functions.invoke('get-tracking-status', {
+        body: { job_id: jobId }
+      });
+
+      if (error) {
+        console.error('Status check failed:', error);
+        return;
+      }
+
+      const job = data.job;
+      if (!job) return;
+
+      // Update steps based on current step (now using integer steps)
+      const currentStepIndex = job.current_step || 0;
+      setCurrentStep(currentStepIndex);
+
+      // Get progress from progress_data
+      const progressData = job.progress_data || {};
+      const currentProgress = progressData.progress || 0;
+
+      // Update steps status
+      setSteps(prev => prev.map((step, index) => {
+        if (index < currentStepIndex) {
+          return { ...step, status: 'completed', progress: 100 };
+        } else if (index === currentStepIndex) {
+          return { 
+            ...step, 
+            status: job.status === 'failed' ? 'error' : 'processing', 
+            progress: currentProgress
+          };
+        } else {
+          return { ...step, status: 'pending', progress: 0 };
+        }
+      }));
+
+      // Update results
+      if (data.cidr_ranges?.length > 0) {
+        const cidrResults = data.cidr_ranges.map((cidr: any) => ({
+          type: 'cidr' as const,
+          value: cidr.cidr_range,
+          details: `${cidr.ip_count || 'Unknown'} IPs`
+        }));
+        setResults(prev => {
+          const filtered = prev.filter(r => r.type !== 'cidr');
+          return [...filtered, ...cidrResults];
+        });
+      }
+
+      if (data.discovered_ips?.length > 0) {
+        const ipResults = data.discovered_ips.map((ip: any) => ({
+          type: 'ip' as const,
+          value: ip.ip_address,
+          details: ip.is_active ? 'Active' : 'Inactive'
+        }));
+        setResults(prev => {
+          const filtered = prev.filter(r => r.type !== 'ip');
+          return [...filtered, ...ipResults];
+        });
+      }
+
+      if (data.resolved_domains?.length > 0) {
+        const domainResults = data.resolved_domains.map((domain: any) => ({
+          type: 'domain' as const,
+          value: domain.domain_name,
+          details: domain.domain_type || 'Standard'
+        }));
+        setResults(prev => {
+          const filtered = prev.filter(r => r.type !== 'domain');
+          return [...filtered, ...domainResults];
+        });
+      }
+
+      // Check if tracking is complete or failed
+      if (job.status === 'completed') {
+        setIsTracking(false);
+        toast({
+          title: "Tracking Complete",
+          description: `Successfully tracked ASN ${asnNumber}`,
+        });
+      } else if (job.status === 'failed') {
+        setIsTracking(false);
+        toast({
+          title: "Tracking Failed",
+          description: job.error_message || "Tracking failed",
+          variant: "destructive"
+        });
+      }
+
+    } catch (error: any) {
+      console.error('Status update failed:', error);
+    }
+  };
+
+  // Poll for status updates when tracking
+  useEffect(() => {
+    if (!isTracking || !jobId) return;
+
+    const interval = setInterval(updateTrackingStatus, 2000);
+    return () => clearInterval(interval);
+  }, [isTracking, jobId]);
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -215,7 +296,7 @@ const ASNTracker = () => {
                 />
               </div>
               <Button 
-                onClick={simulateTracking}
+                onClick={startTracking}
                 disabled={isTracking}
                 className="btn-cyber px-8"
               >

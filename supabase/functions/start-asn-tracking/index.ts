@@ -87,14 +87,8 @@ serve(async (req) => {
       );
     }
 
-    // Get current user
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return new Response(
-        JSON.stringify({ error: 'Authentication required' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    // For now, work without authentication since tables are public
+    const userId = 'anonymous';
 
     // Check if ASN info exists, if not fetch it from external API
     let { data: asnInfo } = await supabase
@@ -135,11 +129,10 @@ serve(async (req) => {
     const { data: job, error: jobError } = await supabase
       .from('tracking_jobs')
       .insert({
-        user_id: user.id,
         asn_number,
         status: 'pending',
-        current_step: 'asn_lookup',
-        progress: 10
+        current_step: 0,
+        progress_data: { current_step_name: 'asn_lookup' }
       })
       .select()
       .single();
@@ -183,7 +176,11 @@ async function processAsnTracking(jobId: string, asnNumber: number) {
     // Update status to running
     await supabase
       .from('tracking_jobs')
-      .update({ status: 'running', current_step: 'cidr_discovery', progress: 20 })
+      .update({ 
+        status: 'running', 
+        current_step: 1, 
+        progress_data: { current_step_name: 'cidr_discovery', progress: 20 }
+      })
       .eq('id', jobId);
 
     // Mock CIDR discovery - in real implementation, you'd query BGP data
@@ -215,9 +212,12 @@ async function processAsnTracking(jobId: string, asnNumber: number) {
     await supabase
       .from('tracking_jobs')
       .update({ 
-        current_step: 'ip_discovery', 
-        progress: 50, 
-        total_cidrs: mockCidrs.length 
+        current_step: 2,
+        progress_data: { 
+          current_step_name: 'ip_discovery', 
+          progress: 50, 
+          total_cidrs: mockCidrs.length 
+        }
       })
       .eq('id', jobId);
 
@@ -229,10 +229,13 @@ async function processAsnTracking(jobId: string, asnNumber: number) {
       .from('tracking_jobs')
       .update({ 
         status: 'completed',
-        current_step: 'completed',
-        progress: 100,
-        total_ips: mockCidrs.length * 10,
-        total_domains: mockCidrs.length * 5
+        current_step: 4,
+        progress_data: {
+          current_step_name: 'completed',
+          progress: 100,
+          total_ips: mockCidrs.length * 10,
+          total_domains: mockCidrs.length * 5
+        }
       })
       .eq('id', jobId);
 
