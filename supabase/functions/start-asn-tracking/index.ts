@@ -302,6 +302,44 @@ async function processAsnTracking(jobId: string, asnNumber: number) {
 
     console.log(`[${jobId}] Found ${discoveredIps.size} live IPs with HTTP services`);
 
+    // Update progress to domain resolution phase
+    await supabase
+      .from('tracking_jobs')
+      .update({ 
+        current_step: 3,
+        progress_data: { 
+          current_step_name: 'domain_resolution', 
+          progress: 75, 
+          total_ips: discoveredIps.size 
+        }
+      })
+      .eq('id', jobId);
+
+    // Domain Resolution - Use reverse DNS and whois-like lookup
+    console.log(`[${jobId}] Starting domain resolution for ${discoveredIps.size} IPs`);
+    
+    const resolvedDomains = new Set<{ip: string, domain: string, type: string}>();
+    
+    for (const ip of Array.from(discoveredIps).slice(0, 20)) { // Limit to first 20 IPs
+      const domains = await performDomainResolution(ip);
+      
+      for (const domain of domains) {
+        resolvedDomains.add({ip, domain: domain.name, type: domain.type});
+        
+        // Insert resolved domain into database
+        await supabase
+          .from('resolved_domains')
+          .insert({
+            job_id: jobId,
+            ip_address: ip,
+            domain_name: domain.name,
+            domain_type: domain.type
+          });
+      }
+    }
+
+    console.log(`[${jobId}] Resolved ${resolvedDomains.size} domains`);
+
     // Update to completed
     await supabase
       .from('tracking_jobs')
@@ -312,7 +350,7 @@ async function processAsnTracking(jobId: string, asnNumber: number) {
           current_step_name: 'completed',
           progress: 100,
           total_ips: discoveredIps.size,
-          total_domains: Math.floor(discoveredIps.size * 0.3) // Estimate domains from live IPs
+          total_domains: resolvedDomains.size
         }
       })
       .eq('id', jobId);
@@ -389,4 +427,46 @@ async function simulateHttpCheck(ip: string, ports: number[]): Promise<{
     openPorts,
     services
   };
+}
+
+// Simulate domain resolution using reverse DNS and whois-like lookup
+async function performDomainResolution(ip: string): Promise<{name: string, type: string}[]> {
+  const domains: {name: string, type: string}[] = [];
+  
+  // Simulate reverse DNS lookup
+  const hasReverseDns = Math.random() > 0.6; // 40% chance of having reverse DNS
+  
+  if (hasReverseDns) {
+    // Generate realistic domain names based on IP
+    const [a, b, c, d] = ip.split('.').map(Number);
+    const domainTypes = [
+      { name: `host-${a}-${b}-${c}-${d}.example.com`, type: 'reverse_dns' },
+      { name: `server${d}.hosting-provider.net`, type: 'reverse_dns' },
+      { name: `mail${c}.company.org`, type: 'mail_server' },
+      { name: `web${d}.cdn-provider.com`, type: 'web_server' }
+    ];
+    
+    // Randomly select 1-2 domain types
+    const numDomains = Math.floor(Math.random() * 2) + 1;
+    for (let i = 0; i < numDomains; i++) {
+      const domain = domainTypes[Math.floor(Math.random() * domainTypes.length)];
+      domains.push(domain);
+    }
+  }
+  
+  // Simulate SSL certificate domain discovery (like from certificates.crt.sh)
+  const hasSslCerts = Math.random() > 0.7; // 30% chance of discoverable SSL certs
+  
+  if (hasSslCerts) {
+    const sslDomains = [
+      { name: `api.example-corp.com`, type: 'ssl_cert' },
+      { name: `secure.webapp-${Math.floor(Math.random() * 1000)}.com`, type: 'ssl_cert' },
+      { name: `admin.internal-system.net`, type: 'ssl_cert' }
+    ];
+    
+    const sslDomain = sslDomains[Math.floor(Math.random() * sslDomains.length)];
+    domains.push(sslDomain);
+  }
+  
+  return domains;
 }
