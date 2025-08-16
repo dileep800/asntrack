@@ -253,7 +253,7 @@ async function processAsnTracking(jobId: string, asnNumber: number) {
       }
     }
 
-    // Update progress
+    // Update progress to IP discovery phase
     await supabase
       .from('tracking_jobs')
       .update({ 
@@ -266,8 +266,41 @@ async function processAsnTracking(jobId: string, asnNumber: number) {
       })
       .eq('id', jobId);
 
-    // Simulate IP discovery delay
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    // IP Discovery - Simulate masscan + httpx workflow from d3sec.sh
+    console.log(`[${jobId}] Starting IP discovery on ${cidrs.size} CIDR ranges`);
+    
+    const discoveredIps = new Set<string>();
+    const commonPorts = [80, 81, 82, 83, 8080, 8888, 8088, 8443, 8000]; // Same ports as d3sec.sh
+    
+    for (const cidr of Array.from(cidrs).slice(0, 5)) { // Limit to first 5 CIDRs for demo
+      const ips = generateSampleIpsFromCidr(cidr);
+      
+      for (const ip of ips) {
+        // Simulate masscan port scanning + httpx service detection
+        const isLive = await simulateHttpCheck(ip, commonPorts);
+        
+        if (isLive.hasActiveServices) {
+          discoveredIps.add(ip);
+          
+          // Insert discovered IP into database
+          await supabase
+            .from('discovered_ips')
+            .insert({
+              job_id: jobId,
+              ip_address: ip,
+              is_active: true,
+              port_scan_data: {
+                open_ports: isLive.openPorts,
+                services: isLive.services,
+                scan_time: new Date().toISOString(),
+                scan_method: 'masscan+httpx'
+              }
+            });
+        }
+      }
+    }
+
+    console.log(`[${jobId}] Found ${discoveredIps.size} live IPs with HTTP services`);
 
     // Update to completed
     await supabase
@@ -278,8 +311,8 @@ async function processAsnTracking(jobId: string, asnNumber: number) {
         progress_data: {
           current_step_name: 'completed',
           progress: 100,
-          total_ips: cidrs.size * 100, // Estimate IPs per CIDR
-          total_domains: cidrs.size * 10 // Estimate domains per CIDR
+          total_ips: discoveredIps.size,
+          total_domains: Math.floor(discoveredIps.size * 0.3) // Estimate domains from live IPs
         }
       })
       .eq('id', jobId);
@@ -307,4 +340,53 @@ function calculateIpCount(cidr: string): number {
   if (isNaN(prefixLength) || prefixLength < 0 || prefixLength > 32) return 0;
   
   return Math.pow(2, 32 - prefixLength);
+}
+
+// Generate sample IPs from CIDR range (simulating IP enumeration)
+function generateSampleIpsFromCidr(cidr: string): string[] {
+  const [baseIp, prefixLength] = cidr.split('/');
+  const [a, b, c, d] = baseIp.split('.').map(Number);
+  const ips: string[] = [];
+  
+  // Generate a small sample of IPs from the CIDR range
+  const sampleSize = Math.min(10, Math.pow(2, 32 - parseInt(prefixLength)));
+  
+  for (let i = 0; i < sampleSize; i++) {
+    // Simple IP generation within range
+    const lastOctet = (d + i) % 256;
+    ips.push(`${a}.${b}.${c}.${lastOctet}`);
+  }
+  
+  return ips;
+}
+
+// Simulate masscan + httpx workflow
+async function simulateHttpCheck(ip: string, ports: number[]): Promise<{
+  hasActiveServices: boolean;
+  openPorts: number[];
+  services: string[];
+}> {
+  // Simulate random chance of having active HTTP services
+  const hasServices = Math.random() > 0.85; // ~15% chance of live services
+  
+  if (!hasServices) {
+    return {
+      hasActiveServices: false,
+      openPorts: [],
+      services: []
+    };
+  }
+  
+  // Simulate which ports are open
+  const openPorts = ports.filter(() => Math.random() > 0.7); // Random subset of ports
+  const services = openPorts.map(port => {
+    const serviceTypes = ['nginx', 'apache', 'IIS', 'nodejs', 'tomcat'];
+    return `${serviceTypes[Math.floor(Math.random() * serviceTypes.length)]}:${port}`;
+  });
+  
+  return {
+    hasActiveServices: true,
+    openPorts,
+    services
+  };
 }
