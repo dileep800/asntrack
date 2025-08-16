@@ -182,28 +182,74 @@ async function processAsnTracking(jobId: string, asnNumber: number) {
       })
       .eq('id', jobId);
 
-    // Mock CIDR discovery - in real implementation, you'd query BGP data
-    const mockCidrs = [
-      `192.168.${asnNumber % 256}.0/24`,
-      `10.${asnNumber % 256}.0.0/16`,
-      `172.16.${asnNumber % 256}.0/24`
-    ];
+    // Real CIDR discovery using BGPView and RADB
+    console.log(`[${jobId}] Starting CIDR discovery for AS${asnNumber}`);
+    
+    const cidrs = new Set<string>();
+    
+    // Fetch from BGPView API
+    try {
+      console.log(`[${jobId}] Fetching from BGPView...`);
+      const bgpResponse = await fetch(`https://api.bgpview.io/asn/${asnNumber}/prefixes`);
+      if (bgpResponse.ok) {
+        const bgpData = await bgpResponse.json();
+        if (bgpData.data && bgpData.data.ipv4_prefixes) {
+          bgpData.data.ipv4_prefixes.forEach((prefix: any) => {
+            if (prefix.prefix) {
+              cidrs.add(prefix.prefix);
+            }
+          });
+        }
+      }
+    } catch (error) {
+      console.error(`[${jobId}] BGPView fetch error:`, error);
+    }
 
-    // Insert CIDR ranges
+    // Fetch from RADB WHOIS (via RIPE REST API as fallback)
+    try {
+      console.log(`[${jobId}] Fetching from RIPE database...`);
+      const whoisResponse = await fetch(`https://rest.db.ripe.net/search.json?query-string=AS${asnNumber}&type-filter=route`);
+      if (whoisResponse.ok) {
+        const whoisData = await whoisResponse.json();
+        if (whoisData.objects && whoisData.objects.object) {
+          whoisData.objects.object.forEach((obj: any) => {
+            if (obj.attributes && obj.attributes.attribute) {
+              obj.attributes.attribute.forEach((attr: any) => {
+                if (attr.name === 'route' && attr.value) {
+                  cidrs.add(attr.value);
+                }
+              });
+            }
+          });
+        }
+      }
+    } catch (error) {
+      console.error(`[${jobId}] RIPE database fetch error:`, error);
+    }
+
+    console.log(`[${jobId}] Found ${cidrs.size} unique CIDRs`);
+
+    // Get ASN info for foreign key
     const { data: asnInfo } = await supabase
       .from('asn_info')
       .select('id')
       .eq('asn_number', asnNumber)
       .single();
 
-    if (asnInfo) {
-      for (const cidr of mockCidrs) {
-        await supabase
-          .from('cidr_ranges')
-          .insert({
-            asn_id: asnInfo.id,
-            cidr_range: cidr
-          });
+    // Insert CIDR ranges
+    if (asnInfo && cidrs.size > 0) {
+      for (const cidr of cidrs) {
+        try {
+          await supabase
+            .from('cidr_ranges')
+            .insert({
+              asn_id: asnInfo.id,
+              cidr_range: cidr,
+              ip_count: calculateIpCount(cidr)
+            });
+        } catch (error) {
+          console.error(`[${jobId}] Error inserting CIDR ${cidr}:`, error);
+        }
       }
     }
 
@@ -215,7 +261,7 @@ async function processAsnTracking(jobId: string, asnNumber: number) {
         progress_data: { 
           current_step_name: 'ip_discovery', 
           progress: 50, 
-          total_cidrs: mockCidrs.length 
+          total_cidrs: cidrs.size 
         }
       })
       .eq('id', jobId);
@@ -232,8 +278,8 @@ async function processAsnTracking(jobId: string, asnNumber: number) {
         progress_data: {
           current_step_name: 'completed',
           progress: 100,
-          total_ips: mockCidrs.length * 10,
-          total_domains: mockCidrs.length * 5
+          total_ips: cidrs.size * 100, // Estimate IPs per CIDR
+          total_domains: cidrs.size * 10 // Estimate domains per CIDR
         }
       })
       .eq('id', jobId);
@@ -250,4 +296,15 @@ async function processAsnTracking(jobId: string, asnNumber: number) {
       })
       .eq('id', jobId);
   }
+}
+
+// Helper function to calculate IP count from CIDR
+function calculateIpCount(cidr: string): number {
+  const parts = cidr.split('/');
+  if (parts.length !== 2) return 0;
+  
+  const prefixLength = parseInt(parts[1]);
+  if (isNaN(prefixLength) || prefixLength < 0 || prefixLength > 32) return 0;
+  
+  return Math.pow(2, 32 - prefixLength);
 }
