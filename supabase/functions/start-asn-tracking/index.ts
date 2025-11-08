@@ -87,8 +87,16 @@ serve(async (req) => {
       );
     }
 
-    // For now, work without authentication since tables are public
-    const userId = 'anonymous';
+    // Get authenticated user
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ error: 'Authentication required' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
+    const userId = user.id;
 
     // Check if ASN info exists, if not fetch it from external API
     let { data: asnInfo } = await supabase

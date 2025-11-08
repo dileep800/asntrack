@@ -1,11 +1,25 @@
 import { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { Menu, X, Shield, Activity } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Menu, X, Shield, Activity, LogOut, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast';
 
 const Navigation = () => {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, signOut } = useAuth();
+  const { toast } = useToast();
+
+  const handleSignOut = async () => {
+    await signOut();
+    toast({
+      title: "Signed out",
+      description: "You've been successfully signed out",
+    });
+    navigate('/');
+  };
 
   const navItems = [
     { name: 'Home', path: '/' },
@@ -50,11 +64,24 @@ const Navigation = () => {
             </div>
           </div>
 
-          {/* CTA Button */}
-          <div className="hidden md:block">
-            <Button className="btn-cyber">
-              Get Started
-            </Button>
+          {/* Auth Buttons */}
+          <div className="hidden md:flex items-center space-x-4">
+            {user ? (
+              <>
+                <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+                  <User className="h-4 w-4" />
+                  <span className="max-w-[150px] truncate">{user.email}</span>
+                </div>
+                <Button variant="outline" size="sm" onClick={handleSignOut}>
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Sign Out
+                </Button>
+              </>
+            ) : (
+              <Button className="btn-cyber" onClick={() => navigate('/auth')}>
+                Sign In
+              </Button>
+            )}
           </div>
 
           {/* Mobile menu button */}
@@ -89,9 +116,22 @@ const Navigation = () => {
                 </Link>
               ))}
               <div className="pt-2">
-                <Button className="btn-cyber w-full">
-                  Get Started
-                </Button>
+                {user ? (
+                  <>
+                    <div className="flex items-center space-x-2 px-3 py-2 text-sm text-muted-foreground">
+                      <User className="h-4 w-4" />
+                      <span className="truncate">{user.email}</span>
+                    </div>
+                    <Button variant="outline" className="w-full" onClick={handleSignOut}>
+                      <LogOut className="h-4 w-4 mr-2" />
+                      Sign Out
+                    </Button>
+                  </>
+                ) : (
+                  <Button className="btn-cyber w-full" onClick={() => navigate('/auth')}>
+                    Sign In
+                  </Button>
+                )}
               </div>
             </div>
           </div>
